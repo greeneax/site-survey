@@ -1182,6 +1182,9 @@
         let aiSuggestionsActive = false;
         let aiSystemEnabled = false; // Admin-controlled global setting
 
+        // Temporarily disable Microsoft authentication
+        window.AUTH_DISABLED = true;
+
         // Legacy welcome modal function for compatibility
         function showWelcomeModal() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -1208,6 +1211,13 @@
         }
 
         function initializeAuthentication() {
+            if (window.AUTH_DISABLED) {
+                window.currentUserEmail = 'alex.greene@ita.com';
+                window.currentUserName = 'Alex Greene';
+                window.currentUserRole = 'admin';
+                showMainApp();
+                return;
+            }
             // Check if user is already authenticated via Microsoft SSO
             if (window.currentUserEmail && window.currentUserName) {
                 showDashboard();
@@ -8557,6 +8567,37 @@ Focus on practical information that would affect event planning, setup, logistic
         // Initialize authentication
         async function initAuth() {
             try {
+                if (window.AUTH_DISABLED) {
+                    console.log('Authentication disabled - using default admin account');
+                    currentUser = {
+                        account: {
+                            username: 'Alex.Greene@ita.com',
+                            name: 'Alex Greene',
+                            idTokenClaims: {
+                                email: 'Alex.Greene@ita.com'
+                            }
+                        }
+                    };
+
+                    // Immediately show main app and hide auth container
+                    showMainApp();
+
+                    // Set up the authenticated user
+                    window.currentUserEmail = 'Alex.Greene@ita.com';
+                    window.currentUserName = 'Alex Greene';
+                    window.currentUserRole = 'admin';
+
+                    // Update UI
+                    updateUserInterface('Alex Greene', 'Alex.Greene@ita.com', 'admin');
+
+                    // Track user session
+                    await trackUserSession('Alex.Greene@ita.com', 'Alex Greene', 'admin');
+
+                    // Initialize the survey app
+                    initializeSurveyApp();
+                    return;
+                }
+
                 // Development mode - active when not running on ita.com
                 const hostname = window.location.hostname.toLowerCase();
                 if (!hostname.endsWith('ita.com')) {
@@ -9281,8 +9322,10 @@ Error: ${error.message}
             initAuth();
             
             // Auth event listeners
-            document.getElementById('login-btn').addEventListener('click', handleMicrosoftLogin);
-            document.getElementById('logout-btn').addEventListener('click', handleLogout);
+            if (!window.AUTH_DISABLED) {
+                document.getElementById('login-btn').addEventListener('click', handleMicrosoftLogin);
+                document.getElementById('logout-btn').addEventListener('click', handleLogout);
+            }
             
             // User menu setup handled in setupUserMenu()
             
