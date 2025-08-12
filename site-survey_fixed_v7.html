@@ -1610,7 +1610,7 @@
                         const downloadURL = await getDownloadURL(uploadResult.ref);
                         const agendaData = { id: agendaId, name: file.name, url: downloadURL, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), uploadedBy: window.currentUserEmail || currentUserName };
                         agendaFiles.push(agendaData);
-                        await updateSurveyData({ agendaFiles });
+                        await updateSurveyData({ agendaFiles }, true);
                         logActivity(`Uploaded agenda file: "${file.name}"`);
                         renderAgendaFiles(agendaFiles);
                         completed++; if (bar && txt) { const pct = Math.round((completed/total)*100); bar.style.width = pct+'%'; txt.textContent = `Uploading ${completed} / ${total} (${pct}%)`; }
@@ -2148,7 +2148,7 @@
                     // First load - populate previous values
                     previousFieldValues = { ...data };
                 }
-                
+
                 renderAllSections(data);
                 if (!surveyData) {
                     updateSurveyData({ 'r2-number': window.appId }, false); // Don't auto-save on initialization
@@ -2166,9 +2166,9 @@
                 window.history.replaceState({}, '', newUrl);
             }
 
-            console.log('[Recall] DB event_name:', surveyData.event_name, 'for survey_id:', surveyData.survey_id);
-            let data = mapRowToUIData(surveyData);
-            console.log('[Recall] Mapped UI event-name:', data['event-name']);
+            // Fetch full survey including child tables
+            const fullData = await fetchSurvey({ survey_id: window.appId });
+            const data = fullData || mapRowToUIData(surveyData);
 
             // Store current data and update previous values tracker
             fullSurveyData = data;
@@ -2177,27 +2177,8 @@
             }
             renderAllSections(data);
 
-            // Set up real-time subscription
-            const surveySubscription = supabase
-                .channel(`survey-${window.appId}`)
-                .on('postgres_changes', {
-                    event: '*',
-                    schema: 'public',
-                    table: 'surveys',
-                    filter: `survey_id=eq.${window.appId}`
-                }, (payload) => {
-                    const row = payload.new;
-                    if (row) {
-                        console.log('[Recall:Realtime] DB event_name:', row.event_name, 'for survey_id:', row.survey_id);
-                    }
-                    const data = row ? mapRowToUIData(row) : {};
-                    if (data) {
-                        console.log('[Recall:Realtime] Mapped UI event-name:', data['event-name']);
-                    }
-                    fullSurveyData = data;
-                    renderAllSections(data);
-                })
-                .subscribe();
+            // Set up real-time subscriptions for all related tables
+            subscribeSurveyChannels();
         }
 
         async function setupActivityLogSubscription() {
@@ -2384,19 +2365,19 @@
             }
         }
         
-        let compositeAutosaveBuffer = {}; let compositeAutosaveTimer = null; const COMPOSITE_AUTOSAVE_DELAY = 1200;
+        let compositeAutosaveBuffer = {};
+        setInterval(flushCompositeAutosave, 10000);
         function queueCompositeAutosave(part) {
             compositeAutosaveBuffer = { ...compositeAutosaveBuffer, ...part };
-            if (compositeAutosaveTimer) clearTimeout(compositeAutosaveTimer);
-            compositeAutosaveTimer = setTimeout(flushCompositeAutosave, COMPOSITE_AUTOSAVE_DELAY);
         }
         async function flushCompositeAutosave() {
             if (!Object.keys(compositeAutosaveBuffer).length) return;
             const patch = buildCompositeFromDelta(compositeAutosaveBuffer);
-            compositeAutosaveBuffer = {}; compositeAutosaveTimer = null;
+            compositeAutosaveBuffer = {};
             if (patch) {
                 if(saveStatus) saveStatus.textContent = 'Saving...';
                 try {
+                    await ensureSurveyRow();
                     await enqueueCompositeSave(patch);
                     if(saveStatus) { saveStatus.textContent = 'All changes saved.'; setTimeout(()=>{ if(saveStatus) saveStatus.textContent=''; },2000); }
                 } catch(e){ console.error('flushCompositeAutosave error', e); if(saveStatus) saveStatus.textContent='Error saving.'; }
@@ -2420,12 +2401,14 @@
         }
         // ...existing code...
                 async function updateSurveyData(dataObject, triggerAutoSave = false) {
-                    // Only require an appId to autosave; user ID is not mandatory for DB persistence
+                    // Only proceed if we have an appId
                     if (!window.appId) return;
                     // Merge local model for UI (not writing survey_data blob anymore)
                     fullSurveyData = { ...fullSurveyData, ...dataObject };
-                    // Queue composite autosave (debounced)
-                    queueCompositeAutosave(dataObject);
+                    // Only queue autosave when explicitly requested
+                    if (triggerAutoSave) {
+                        queueCompositeAutosave(dataObject);
+                    }
                 }
         // ...existing code...
         
@@ -2455,20 +2438,8 @@
             showTypingIndicator(fieldName, target);
             
             formInputTimeout = setTimeout(() => {
-                // Define which fields should trigger auto-save to database
-                const significantFields = [
-                    'event-name', 'venue-name', 'client-business', 'status',
-                    'event-date', 'event-start-time', 'event-end-time',
-                    'attendee-count', 'contact-name', 'contact-email', 'contact-phone',
-                    'survey-date', 'survey-team', 'survey-team-members'
-                ];
-                
-                const shouldTriggerAutoSave = significantFields.includes(fieldName) || 
-                                            fieldName.startsWith('room-') || 
-                                            fieldName.includes('agenda');
-                
                 const dataObject = { [fieldName]: newValue };
-                updateSurveyData(dataObject, shouldTriggerAutoSave);
+                updateSurveyData(dataObject, true);
                 
                 // Track the change for activity logging
                 queueFieldChange(fieldName, previousValue, newValue);
@@ -3062,7 +3033,7 @@
                     const photos = currentData.photos || {};
                     if (!photos[sectionName]) photos[sectionName] = [];
                     photos[sectionName].push(photoData);
-                    await updateSurveyData({ photos });
+                    await updateSurveyData({ photos }, true);
                     logActivity(`Uploaded photo "${file.name}" to ${sectionName} section`);
                 } catch (error) {
                     console.error('Upload failed:', error);
@@ -3089,7 +3060,7 @@
                     const { data: rows } = await supabase.from(TABLES.PHOTOS).select('*').eq('survey_id', window.surveyRowUuid).is('deleted_at', null).order('created_at', { ascending: true });
                     const grouped = {};
                     (rows||[]).forEach(p => { const key = p.section || 'uncategorized'; (grouped[key]||(grouped[key]=[])).push(p); });
-                    await updateSurveyData({ photos: grouped });
+                    await updateSurveyData({ photos: grouped }, false);
                 }
                 logActivity(`Deleted photo from ${sectionName} section`);
             } catch (error) {
@@ -4003,7 +3974,9 @@
 
         async function saveSurveyToDatabase(silent = false) {
             if (!supabase || !window.appId) return;
-            
+            // Ensure a survey row exists before attempting to save
+            await ensureSurveyRow();
+
             try {
                 // Check if this is a new survey that needs a proper R2 number
                 if (window.appId.startsWith('NEW-') && !silent) {
@@ -4765,40 +4738,6 @@
                     alert('Failed to delete survey.');
                 }
             }
-        }
-
-        // Auto-save survey to database when significant changes are made
-        let autoSaveTimeout;
-        let lastAutoSaveData = null;
-        
-        function scheduleAutoSave() {
-            clearTimeout(autoSaveTimeout);
-            autoSaveTimeout = setTimeout(async () => {
-                try {
-                    // Get current data to check if anything actually changed
-                    const currentData = await getCurrentSurveyData();
-                    const currentDataString = JSON.stringify(currentData);
-                    
-                    // Only auto-save if data has actually changed since last auto-save
-                    if (lastAutoSaveData === currentDataString) {
-                        return; // No changes, skip auto-save
-                    }
-                    
-                    await saveSurveyToDatabase(true); // Silent auto-save
-                    lastAutoSaveData = currentDataString;
-                    
-                    if(saveStatus) {
-                        saveStatus.innerHTML = '<span class="text-green-600">✓ Auto-saved</span>';
-                        setTimeout(() => { if(saveStatus) saveStatus.textContent = ''; }, 2000);
-                    }
-                } catch (error) {
-                    console.error('Auto-save failed:', error);
-                    if(saveStatus) {
-                        saveStatus.innerHTML = '<span class="text-red-600">⚠ Auto-save failed</span>';
-                        setTimeout(() => { if(saveStatus) saveStatus.textContent = ''; }, 3000);
-                    }
-                }
-            }, 10000); // Auto-save 10 seconds after last change (increased from 3)
         }
 
         // AI Assistant Functions
@@ -5867,6 +5806,7 @@ Please be thorough but practical in your analysis. If information is not clear, 
 
         // Auto-flush pending changes on page unload
         window.addEventListener('beforeunload', () => {
+            flushCompositeAutosave();
             flushPendingChanges();
         });
 
@@ -5956,7 +5896,7 @@ Please be thorough but practical in your analysis. If information is not clear, 
             };
             
             roomAccess.push(newRoomAccess);
-            await updateSurveyData({ roomAccess });
+            await updateSurveyData({ roomAccess }, true);
             renderRoomAccessList(roomAccess);
             logActivity(`Added room access schedule for: ${newRoomAccess.roomName}`);
         }
@@ -6030,7 +5970,7 @@ Please be thorough but practical in your analysis. If information is not clear, 
             const access = roomAccess.find(a => a.id === accessId);
             if (access) {
                 access[field] = value;
-                await updateSurveyData({ roomAccess });
+                await updateSurveyData({ roomAccess }, true);
                 logActivity(`Updated room access: ${access.roomName} - ${field}`);
             }
         }
@@ -6043,7 +5983,7 @@ Please be thorough but practical in your analysis. If information is not clear, 
             const roomToRemove = roomAccess.find(a => a.id === accessId);
             
             roomAccess = roomAccess.filter(a => a.id !== accessId);
-            await updateSurveyData({ roomAccess });
+            await updateSurveyData({ roomAccess }, true);
             
             if (roomToRemove) {
                 logActivity(`Removed room access: ${roomToRemove.roomName}`);
@@ -6326,7 +6266,7 @@ Please be thorough but practical in your analysis. If information is not clear, 
                         excluded: c.excluded || false
                     }));
                 }
-                await updateSurveyData(patch);
+                await updateSurveyData(patch, false);
             } catch (e) {
                 console.error('refreshNormalizedChildren failed:', e);
             }
@@ -7739,7 +7679,7 @@ Please be thorough but practical in your analysis. If information is not clear, 
                             // Move photos from new-room area to the actual room
                             photos[`rooms-${editingRoomId}`] = [...(photos[`rooms-${editingRoomId}`] || []), ...newRoomPhotos];
                             delete photos['new-room-photos'];
-                            await updateSurveyData({ photos });
+                            await updateSurveyData({ photos }, true);
                         }
                         
                         cancelRoomEdit();
@@ -7757,7 +7697,7 @@ Please be thorough but practical in your analysis. If information is not clear, 
                         if (newRoomPhotos.length > 0) {
                             photos[`rooms-${roomData.id}`] = newRoomPhotos;
                             delete photos['new-room-photos'];
-                            await updateSurveyData({ photos });
+                            await updateSurveyData({ photos }, true);
                         }
                         
                         form.reset();
@@ -7765,7 +7705,7 @@ Please be thorough but practical in your analysis. If information is not clear, 
                         setTimeout(()=>{ try { form['room-name'].focus(); } catch(_){} },0);
                     }
                     
-                    updateSurveyData({ rooms: updatedRooms });
+                    updateSurveyData({ rooms: updatedRooms }, true);
                     
                     // Auto-save venue data
                     setTimeout(autoSaveVenueData, 1000);
@@ -7941,7 +7881,7 @@ Please be thorough but practical in your analysis. If information is not clear, 
                 const processBtn = section.querySelector('#process-guidelines-btn');
                 if(processBtn) processBtn.addEventListener('click', handleGuidelinesProcessing);
                 const resetBtn = section.querySelector('#reset-guidelines-btn');
-                if(resetBtn) resetBtn.addEventListener('click', () => { updateSurveyData({ guidelines: {} }); logActivity('Reset Venue Guidelines processor.'); });
+                if(resetBtn) resetBtn.addEventListener('click', () => { updateSurveyData({ guidelines: {} }, true); logActivity('Reset Venue Guidelines processor.'); });
                 const reprocessQuickBtn = section.querySelector('#reprocess-guidelines-btn');
                 if(reprocessQuickBtn) reprocessQuickBtn.addEventListener('click', async () => { const original = guidelinesData.originalText || ''; await reprocessGuidelines(original, guidelinesData); });
                 const openSplitBtn = section.querySelector('#open-guidelines-split-editor-btn');
@@ -8037,7 +7977,7 @@ Please be thorough but practical in your analysis. If information is not clear, 
                             live.textContent = `Diff updated: ${addedInfo} info added, ${removedInfo} removed; ${addedDue} due dates added, ${removedDue} removed.`;
                         }
                         const newGuidelines = { originalText: text, results: parsed, processedAt: new Date().toISOString(), processedBy: window.currentUserEmail || currentUserName };
-                        await updateSurveyData({ guidelines: newGuidelines });
+                        await updateSurveyData({ guidelines: newGuidelines }, true);
                         logActivity('Reprocessed venue guidelines via split editor');
                         showNotification('Guidelines reprocessed & saved', 'success');
                     } catch(e) {
@@ -8161,7 +8101,7 @@ Focus on practical information that would affect event planning, setup, logistic
                     processedBy: window.currentUserEmail || currentUserName
                 };
 
-                await updateSurveyData({ guidelines: guidelinesResult });
+                await updateSurveyData({ guidelines: guidelinesResult }, true);
                 logActivity('Processed venue guidelines with AI assistant.');
                 showNotification('Venue guidelines processed successfully!', 'success');
 
