@@ -767,7 +767,7 @@
     
     <div id="survey-container" class="container mx-auto p-4 max-w-7xl no-print" style="display: none;">
         <header class="text-center mb-6">
-            <h1 class="text-4xl font-bold text-gray-900">Live Event Site Survey</h1>
+            <h1 id="survey-page-title" class="text-4xl font-bold text-gray-900">Live Event Site Survey</h1>
             <p id="header-subtitle" class="text-lg text-gray-600 mt-1">A Collaborative Checklist for Technicians</p>
             <div class="mt-4 flex justify-center gap-4">
                 <button onclick="showSurveyBrowser()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2 shadow-md">
@@ -1109,6 +1109,7 @@
         let changeFlushTimeout;
         
         let userDisplay, saveStatus;
+        window.isNewSurvey = false;
 
         // Initialize Supabase only if configuration is valid
         if (isValidSupabaseConfig(config)) {
@@ -1197,6 +1198,7 @@
                 }
                 
                 // Initialize the main app directly
+                window.isNewSurvey = false;
                 initializeMainApp(directAppId);
             } else {
                 // No direct R2 - check authentication and show appropriate interface
@@ -1366,6 +1368,7 @@
         const mainContainer = document.querySelector('#survey-container');
         if (mainContainer) { mainContainer.style.display='block'; mainContainer.style.visibility='visible'; mainContainer.style.opacity='1'; }
         window.appId = tempR2Number;
+        window.isNewSurvey = true;
         const newUrl = new URL(window.location); newUrl.searchParams.set('id', tempR2Number); window.history.pushState({}, '', newUrl);
         initializeMainApp(tempR2Number, '', '');
         console.log('Created new survey with ID:', tempR2Number);
@@ -1374,6 +1377,7 @@
     async function returnToDashboard() {
             // Exit survey mode and show dashboard body again
             window.inSurveyMode = false;
+            window.isNewSurvey = false;
             document.getElementById('main-app').classList.add('hidden');
             const dash = document.getElementById('dashboard-container');
             if (dash) { dash.classList.remove('hidden'); dash.style.display='block'; dash.style.visibility='visible'; }
@@ -1744,11 +1748,13 @@
 
             // Ensure survey row exists (create if not found) then init
             (async () => {
+                let isNew = true;
                 try {
                     // Try fetch existing by survey_id or r2_quote_number
                     const { data: existing } = await supabase.from('surveys').select('id,survey_id,r2_quote_number').or(`survey_id.eq.${r2Number},r2_quote_number.eq.${r2Number}`).limit(1);
                     if (existing && existing.length) {
                         window.surveyRowUuid = existing[0].id;
+                        isNew = false;
                     } else {
                         // Insert new minimal survey row
                         const insertPayload = { survey_id: r2Number, r2_quote_number: r2Number, status: 'Draft', survey_date: new Date().toISOString().slice(0,10) };
@@ -1760,6 +1766,7 @@
                         }
                     }
                 } catch(e) { console.warn('startSurvey prefetch/create failed', e); }
+                window.isNewSurvey = isNew;
                 // Initialize the main application after ensuring row
                 initializeMainApp(r2Number, eventName, venueName);
             })();
@@ -1770,7 +1777,8 @@
             const welcomeModal = document.getElementById('welcome-modal');
             const mainContainer = document.querySelector('#survey-container');
 
-            document.title = `Survey | ${appId}`;
+            window.isNewSurvey = false;
+            document.title = 'Edit Event Survey';
             document.getElementById('dashboard-container').classList.add('hidden');
             // Keep header visible in legacy path as well
             document.getElementById('dashboard-header')?.classList.remove('hidden');
@@ -1801,6 +1809,7 @@
                         window.currentUserName = name;
                         welcomeModal.classList.add('hidden');
                         welcomeModal.classList.remove('flex');
+                        window.isNewSurvey = false;
                         initializeMainApp(r2, '', '');
                     } else {
                         alert('Please provide both your name and the event R2#.');
@@ -1812,6 +1821,12 @@
     function initializeMainApp(r2Number, eventName = '', venueName = '') {
             // Set global app ID
             window.appId = r2Number;
+
+            const titleEl = document.getElementById('survey-page-title');
+            if (titleEl) {
+                titleEl.textContent = window.isNewSurvey ? 'Create New Survey' : 'Edit Event Survey';
+            }
+            document.title = window.isNewSurvey ? 'Create New Survey' : 'Edit Event Survey';
             
             // Ensure currentUserId is set for Supabase operations
             if (window.currentUserEmail && !currentUserId) {
