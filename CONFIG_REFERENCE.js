@@ -50,9 +50,9 @@ const msalConfig = {
  * - user: Default role for new users
  */
 
-/* 
+/*
  * DEVELOPMENT MODE:
- * - Automatically activates on localhost/127.0.0.1
- * - Uses mock admin user for testing
+ * - Automatically activates when site is not running on ita.com
+ * - Uses mock admin user Alex.Greene@ita.com for testing
  * - All features work without Azure configuration
  */

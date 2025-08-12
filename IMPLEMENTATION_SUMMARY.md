@@ -4,7 +4,7 @@
 
 ### 🔐 Authentication System
 - **Microsoft SSO Integration**: Uses MSAL.js for Azure AD authentication
-- **Development Mode**: Automatic bypass for localhost/127.0.0.1 (Live Server compatible)
+- **Development Mode**: Automatic bypass when site is not running on ita.com (Live Server compatible)
 - **Production Mode**: Full Microsoft authentication required
 - **Session Management**: Real-time user tracking with Supabase
 
@@ -30,16 +30,16 @@
 - **Domain Restrictions**: Azure validates all requests against registered redirect URIs
 
 ### 🛠️ Development Features
-- **Live Server Compatible**: Automatic development mode detection
+- **Domain-Based Detection**: Automatically enters development mode on non-ita.com domains
 - **Mock Authentication**: Uses admin account for local testing
 - **All Features Available**: Complete functionality in development
 - **Easy Deployment**: Works with WordPress or standalone hosting
 
 ## 🚀 How to Use
 
-### For Development (Live Server)
-1. Open site-survey.html in VS Code
-2. Use Live Server extension (Go Live)
+### For Development (Local or Staging)
+1. Open `site-survey.html` in VS Code
+2. Use Live Server extension (Go Live) or host on any non-ita.com domain
 3. Application automatically:
    - Bypasses Microsoft SSO
    - Logs you in as admin user
