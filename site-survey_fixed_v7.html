@@ -1819,6 +1819,8 @@
         }
 
     function initializeMainApp(r2Number, eventName = '', venueName = '') {
+            // Enter survey mode so dashboard doesn't overlay after refresh
+            window.inSurveyMode = true;
             // Set global app ID
             window.appId = r2Number;
 
