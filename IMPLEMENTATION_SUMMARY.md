@@ -3,9 +3,8 @@
 ## ✅ What's Been Implemented
 
 ### 🔐 Authentication System
-- **Microsoft SSO Integration**: Uses MSAL.js for Azure AD authentication
-- **Development Mode**: Automatic bypass for localhost/127.0.0.1 (Live Server compatible)
-- **Production Mode**: Full Microsoft authentication required
+- **Microsoft SSO Integration**: Implemented with MSAL.js but currently disabled
+- **Current Mode**: All visitors are automatically logged in as admin (Alex.Greene@ita.com)
 - **Session Management**: Real-time user tracking with Supabase
 
 ### 🗄️ Database Migration to Supabase
@@ -22,7 +21,7 @@
 - **User**: Create/edit venues and events, no venue list access
 
 ### 🎯 Security Features
-- **Authentication**: Microsoft SSO required in production
+- **Authentication**: Microsoft SSO integration available but currently disabled
 - **Authorization**: Role-based permissions for all operations
 - **Session Tracking**: Active user monitoring and management
 - **Access Controls**: Database restrictions by role
@@ -30,18 +29,16 @@
 - **Domain Restrictions**: Azure validates all requests against registered redirect URIs
 
 ### 🛠️ Development Features
-- **Live Server Compatible**: Automatic development mode detection
-- **Mock Authentication**: Uses admin account for local testing
-- **All Features Available**: Complete functionality in development
+- **SSO Disabled**: Microsoft authentication is temporarily bypassed
+- **Mock Authentication**: All environments use the admin account
+- **All Features Available**: Complete functionality without Azure setup
 - **Easy Deployment**: Works with WordPress or standalone hosting
 
 ## 🚀 How to Use
 
-### For Development (Live Server)
-1. Open site-survey.html in VS Code
-2. Use Live Server extension (Go Live)
-3. Application automatically:
-   - Bypasses Microsoft SSO
+### For Development (Local or Staging)
+1. Open `site-survey.html` in any browser or use a simple web server
+2. Application automatically:
    - Logs you in as admin user
    - Shows full functionality
    - No configuration needed
@@ -373,8 +370,7 @@ const supabaseConfig = {
 - Backward compatible
 
 ## 🧪 Testing
-- **Development**: Full functionality with mock admin user
-- **Production**: Real Microsoft authentication required
+- **Current Build**: Full functionality with mock admin user
 - **Role Testing**: Use admin panel to test different roles
 - **Mobile Testing**: Test camera and touch features
 
@@ -405,7 +401,7 @@ const supabaseConfig = {
    });
    ```
 
-3. **Microsoft Authentication Issues**
+3. **Microsoft Authentication Issues** (when SSO is re-enabled)
    - Verify redirect URI exactly matches your URL
    - Check Azure AD app permissions are granted
    - Test with `?dev=true` parameter first
@@ -418,15 +414,15 @@ const supabaseConfig = {
 **🔍 Testing Checklist:**
 - [ ] File accessible at correct URL
 - [ ] HTTPS enabled on WordPress site
-- [ ] Azure AD app configured correctly
-- [ ] Test user can sign in with Microsoft
+- [ ] Azure AD app configured correctly (for future SSO)
+- [ ] Test user can sign in with Microsoft (once SSO is re-enabled)
 - [ ] Photos upload successfully
 - [ ] Mobile interface works
 - [ ] AI features function (if configured)
 
-**🚨 Emergency Development Mode:**
+**🚨 Emergency Development Mode:** (currently unnecessary since SSO is disabled)
 - Add `?dev=true` to any URL for testing
-- Bypasses authentication
+- Bypasses authentication (not required in current build)
 - Gives full admin access
 - Example: `https://yoursite.com/site-survey.html?id=TEST&dev=true`
 

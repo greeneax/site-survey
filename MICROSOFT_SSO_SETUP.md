@@ -1,6 +1,8 @@
 # Microsoft SSO Setup Guide for Site Survey Application
 
 ## Overview
+> **Note:** Microsoft SSO is currently disabled in the application. The instructions below apply when SSO is re-enabled.
+
 This guide will help you configure Microsoft Single Sign-On (SSO) authentication for your site survey application with role-based access control.
 
 ## Security Levels Implemented

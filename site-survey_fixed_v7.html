@@ -8606,6 +8606,9 @@ Focus on practical information that would affect event planning, setup, logistic
         let msalInstance;
         let currentUser = null;
 
+        // Toggle for Microsoft authentication
+        const MS_AUTH_ENABLED = false; // Set to true to re-enable Microsoft SSO
+
         // User roles mapping
         const userRoles = {
             'alex.greene@ita.com': 'admin'
@@ -8615,34 +8618,34 @@ Focus on practical information that would affect event planning, setup, logistic
         // Initialize authentication
         async function initAuth() {
             try {
-                // For Live Server development - check if we're in localhost
-                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                    console.log('Development mode - bypassing Microsoft SSO');
-                    // Create mock user for development
+                // Development-only authentication (Microsoft SSO disabled)
+                if (!MS_AUTH_ENABLED) {
+                    console.log('Microsoft SSO disabled - bypassing authentication');
+                    // Create mock admin user for all access
                     currentUser = {
                         account: {
-                            username: 'alex.greene@ita.com',
-                            name: 'Alex Greene (Dev)',
+                            username: 'Alex.Greene@ita.com',
+                            name: 'Alex Greene (Admin)',
                             idTokenClaims: {
-                                email: 'alex.greene@ita.com'
+                                email: 'Alex.Greene@ita.com'
                             }
                         }
                     };
-                    
-                    // Immediately show main app and hide auth container for development
+
+                    // Immediately show main app and hide auth container
                     showMainApp();
-                    
+
                     // Set up the authenticated user
-                    window.currentUserEmail = 'alex.greene@ita.com';
-                    window.currentUserName = 'Alex Greene (Dev)';
+                    window.currentUserEmail = 'Alex.Greene@ita.com';
+                    window.currentUserName = 'Alex Greene (Admin)';
                     window.currentUserRole = 'admin';
-                    
+
                     // Update UI
-                    updateUserInterface('Alex Greene (Dev)', 'alex.greene@ita.com', 'admin');
-                    
-                    // Track user session in development mode
-                    await trackUserSession('alex.greene@ita.com', 'Alex Greene (Dev)', 'admin');
-                    
+                    updateUserInterface('Alex Greene (Admin)', 'Alex.Greene@ita.com', 'admin');
+
+                    // Track user session in this temporary mode
+                    await trackUserSession('Alex.Greene@ita.com', 'Alex Greene (Admin)', 'admin');
+
                     // Initialize the survey app
                     initializeSurveyApp();
                     return;
@@ -8683,6 +8686,10 @@ Focus on practical information that would affect event planning, setup, logistic
 
         // Handle Microsoft login
         async function handleMicrosoftLogin() {
+            if (!MS_AUTH_ENABLED) {
+                console.log('Microsoft SSO is disabled');
+                return;
+            }
             if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
                 // Development bypass
                 return;

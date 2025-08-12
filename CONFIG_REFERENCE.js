@@ -50,9 +50,9 @@ const msalConfig = {
  * - user: Default role for new users
  */
 
-/* 
- * DEVELOPMENT MODE:
- * - Automatically activates on localhost/127.0.0.1
- * - Uses mock admin user for testing
- * - All features work without Azure configuration
+/*
+ * AUTHENTICATION STATUS:
+ * - Microsoft SSO temporarily disabled
+ * - All users are logged in as admin Alex.Greene@ita.com
+ * - Re-enable SSO by setting MS_AUTH_ENABLED to true in the HTML
  */
